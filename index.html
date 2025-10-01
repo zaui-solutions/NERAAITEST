@@ -14,10 +14,11 @@
             background-color: #1a202c; /* Tailwind's bg-gray-900 */
             color: #e2e8f0; /* Tailwind's text-gray-200 */
             overflow-x: hidden; /* Prevent horizontal scroll */
+            min-height: 100vh; /* Ensure body takes up full viewport height */
         }
         /* Style for the interactive canvas background */
         #interactive-background {
-            position: absolute;
+            position: fixed; /* Changed to fixed for stability as a viewport background */
             top: 0;
             left: 0;
             width: 100%;
@@ -113,162 +114,191 @@
     </main>
 
     <script>
-        // === CANVAS INTERACTIVE BACKGROUND SCRIPT ===
-        const canvas = document.getElementById('interactive-background');
-        const ctx = canvas.getContext('2d');
-        let particles = [];
-        let mouse = { x: null, y: null, radius: 150 }; // Interaction radius
-
-        // Set initial canvas size
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = document.body.scrollHeight; // Match the full scrollable height
-            initParticles();
-        }
-
-        // Particle constructor
-        class Particle {
-            constructor(x, y, directionX, directionY, size, color) {
-                this.x = x;
-                this.y = y;
-                this.directionX = directionX;
-                this.directionY = directionY;
-                this.size = size;
-                this.color = color;
+        // === CANVAS INTERACTIVE BACKGROUND SCRIPT (Highly Robust Version) ===
+        window.onload = function() {
+            const canvas = document.getElementById('interactive-background');
+            const ctx = canvas ? canvas.getContext('2d') : null;
+            
+            // CRITICAL CHECK: If canvas or context isn't available, exit silently to ensure page loads.
+            if (!canvas || !ctx) {
+                console.error("Canvas or Context not initialized. Aborting animation script.");
+                return;
             }
+            
+            let particles = [];
+            let mouse = { x: null, y: null, radius: 150 }; // Interaction radius
 
-            // Draw individual particle
-            draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
-                ctx.fillStyle = this.color;
-                ctx.fill();
-            }
-
-            // Check particle position, check mouse position, move the particle, draw the particle
-            update() {
-                // Check if particle is still on canvas
-                if (this.x > canvas.width || this.x < 0) {
-                    this.directionX = -this.directionX;
-                }
-                if (this.y > canvas.height || this.y < 0) {
-                    this.directionY = -this.directionY;
-                }
-
-                // Check for collision detection - mouse position vs particle position
-                let dx = mouse.x - this.x;
-                let dy = mouse.y - this.y;
-                let distance = Math.sqrt(dx * dx + dy * dy);
-
-                // If close to the mouse, repel or attract (here, we accelerate/repel slightly)
-                if (distance < mouse.radius + this.size) {
-                    let forceDirectionX = dx / distance;
-                    let forceDirectionY = dy / distance;
-                    let maxSpeed = 10;
-                    let attractionForce = (mouse.radius - distance) / mouse.radius * 0.1; // Subtle force
-
-                    this.directionX -= forceDirectionX * attractionForce * maxSpeed;
-                    this.directionY -= forceDirectionY * attractionForce * maxSpeed;
-                }
+            // Set initial canvas size
+            function resizeCanvas() {
+                // Clear canvas before resizing and re-initializing particles
+                ctx.clearRect(0, 0, canvas.width, canvas.height); 
                 
-                // Move particle
-                this.x += this.directionX;
-                this.y += this.directionY;
-
-                // Draw particle
-                this.draw();
-            }
-        }
-
-        // Create particle array
-        function initParticles() {
-            particles = [];
-            let numberOfParticles = (canvas.width * canvas.height) / 9000;
-            // Limit the number of particles on small screens for performance
-            if (canvas.width < 768) {
-                numberOfParticles = (canvas.width * canvas.height) / 15000;
+                // Set width and height based on the window (viewport) for stability
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                
+                initParticles();
             }
 
-            for (let i = 0; i < numberOfParticles; i++) {
-                let size = (Math.random() * 3) + 1;
-                let x = (Math.random() * ((canvas.width - size * 2) - (size * 2)) + size * 2);
-                let y = (Math.random() * ((canvas.height - size * 2) - (size * 2)) + size * 2);
-                let directionX = (Math.random() * 0.5) - 0.25; // Slow movement
-                let directionY = (Math.random() * 0.5) - 0.25;
-                let color = 'rgba(66, 153, 225, 0.5)'; // Blue (text-blue-400)
+            // Particle constructor
+            class Particle {
+                constructor(x, y, directionX, directionY, size, color) {
+                    this.x = x;
+                    this.y = y;
+                    this.directionX = directionX;
+                    this.directionY = directionY;
+                    this.size = size;
+                    this.color = color;
+                }
 
-                particles.push(new Particle(x, y, directionX, directionY, size, color));
+                // Draw individual particle
+                draw() {
+                    if (!ctx) return; // Defensive check
+                    ctx.beginPath();
+                    
+                    // Apply subtle glow effect
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = this.color; 
+                    
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+
+                    // Reset shadow for the next draw operation (lines)
+                    ctx.shadowBlur = 0;
+                }
+
+                // Check particle position, check mouse position, move the particle, draw the particle
+                update() {
+                    if (!ctx) return; // Defensive check
+
+                    // Check if particle is still on canvas boundaries
+                    if (this.x > canvas.width || this.x < 0) {
+                        this.directionX = -this.directionX;
+                    }
+                    if (this.y > canvas.height || this.y < 0) {
+                        this.directionY = -this.directionY;
+                    }
+
+                    // Calculate distance to mouse
+                    let dx = mouse.x - this.x;
+                    let dy = mouse.y - this.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // Mouse interaction (repel effect)
+                    if (distance < mouse.radius + this.size) {
+                        let forceDirectionX = dx / distance;
+                        let forceDirectionY = dy / distance;
+                        let attractionForce = (mouse.radius - distance) / mouse.radius * 0.1; 
+
+                        this.directionX -= forceDirectionX * attractionForce * 10;
+                        this.directionY -= forceDirectionY * attractionForce * 10;
+                    }
+                    
+                    // Move particle
+                    this.x += this.directionX;
+                    this.y += this.directionY;
+
+                    // Draw particle
+                    this.draw();
+                }
             }
-        }
 
-        // Check distance between particles and draw a connecting line if close
-        function connect() {
-            let opacityValue = 1;
-            for (let a = 0; a < particles.length; a++) {
-                for (let b = a; b < particles.length; b++) {
-                    let distance = ((particles[a].x - particles[b].x) * (particles[a].x - particles[b].x)) +
-                                   ((particles[a].y - particles[b].y) * (particles[a].y - particles[b].y));
+            // Create particle array
+            function initParticles() {
+                particles = [];
+                // Very light density for high performance and stability
+                let numberOfParticles = (canvas.width * canvas.height) / 25000; 
+                
+                for (let i = 0; i < numberOfParticles; i++) {
+                    let size = (Math.random() * 2) + 1; // Slightly smaller size range
+                    let x = (Math.random() * canvas.width);
+                    let y = (Math.random() * canvas.height);
+                    
+                    // *** ADJUSTMENT FOR SLOWER, MORE SUBTLE MOVEMENT ***
+                    // Range changed from (Math.random() * 0.2) - 0.1 to (Math.random() * 0.05) - 0.025
+                    let directionX = (Math.random() * 0.05) - 0.025; 
+                    let directionY = (Math.random() * 0.05) - 0.025;
+                    // *************************************************
 
-                    // Only connect particles within a certain distance
-                    if (distance < (canvas.width/7) * (canvas.height/7)) {
-                        opacityValue = 1 - (distance / 20000); // Fades out with distance
-                        ctx.strokeStyle = `rgba(66, 153, 225, ${opacityValue * 0.4})`; // Blue line, low opacity
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.moveTo(particles[a].x, particles[a].y);
-                        ctx.lineTo(particles[b].x, particles[b].y);
-                        ctx.stroke();
+                    let color = 'rgba(147, 197, 253, 0.9)'; // Brighter and more opaque
+
+                    particles.push(new Particle(x, y, directionX, directionY, size, color));
+                }
+            }
+
+            // Check distance between particles and draw a connecting line if close
+            function connect() {
+                if (!ctx) return; // Defensive check
+                
+                // Ensure lines do not have the glow applied from the last particle draw
+                ctx.shadowBlur = 0; 
+
+                for (let a = 0; a < particles.length; a++) {
+                    for (let b = a; b < particles.length; b++) {
+                        let distanceSquared = ((particles[a].x - particles[b].x) ** 2) +
+                                           ((particles[a].y - particles[b].y) ** 2);
+                        
+                        // Connection distance threshold, slightly adjusted for viewport size
+                        const maxDistanceSquared = (canvas.width / 5) ** 2; 
+
+                        if (distanceSquared < maxDistanceSquared) {
+                            let opacityValue = 1 - (distanceSquared / maxDistanceSquared);
+                            
+                            ctx.strokeStyle = `rgba(147, 197, 253, ${opacityValue * 0.7})`; 
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(particles[a].x, particles[a].y);
+                            ctx.lineTo(particles[b].x, particles[b].y);
+                            ctx.stroke();
+                        }
                     }
                 }
             }
-        }
 
-        // Animation Loop
-        function animate() {
-            requestAnimationFrame(animate);
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the frame
+            // Animation Loop
+            function animate() {
+                try {
+                    requestAnimationFrame(animate);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the frame
 
-            connect(); // Draw the connections
+                    connect(); // Draw the connections
 
-            for (let i = 0; i < particles.length; i++) {
-                particles[i].update(); // Update and draw the particles
-            }
-        }
-
-        // Event Listeners
-        window.addEventListener('resize', resizeCanvas);
-        window.addEventListener('mousemove', 
-            function(event){
-                mouse.x = event.x;
-                mouse.y = event.y;
-            }
-        );
-        // Handle touch events for responsiveness
-        window.addEventListener('touchmove',
-            function(event) {
-                if (event.touches.length > 0) {
-                    mouse.x = event.touches[0].clientX;
-                    mouse.y = event.touches[0].clientY;
+                    for (let i = 0; i < particles.length; i++) {
+                        particles[i].update(); // Update and draw the particles
+                    }
+                } catch (e) {
+                    console.error("NERA AI Animation error (stopped to prevent page block):", e);
                 }
             }
-        );
-        window.addEventListener('mouseleave', 
-            function(){
-                mouse.x = null;
-                mouse.y = null;
-            }
-        );
 
-        // Initialize on load
-        window.onload = function() {
-            resizeCanvas();
+            // Event Listeners
+            window.addEventListener('resize', resizeCanvas);
+            
+            function updateMousePosition(event) {
+                 if (event.touches && event.touches.length > 0) {
+                    mouse.x = event.touches[0].clientX;
+                    mouse.y = event.touches[0].clientY;
+                } else if (event.clientX !== undefined) {
+                    mouse.x = event.clientX;
+                    mouse.y = event.clientY;
+                }
+            }
+
+            window.addEventListener('mousemove', updateMousePosition);
+            window.addEventListener('touchmove', updateMousePosition);
+            
+            window.addEventListener('mouseleave', 
+                function(){
+                    mouse.x = null;
+                    mouse.y = null;
+                }
+            );
+
+            // Start everything
+            resizeCanvas(); 
             animate();
         };
-
-        // Re-adjust canvas height when content loads/changes to match scroll height
-        const observer = new MutationObserver(resizeCanvas);
-        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-
     </script>
 </body>
 </html>
